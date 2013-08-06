@@ -26,6 +26,9 @@ var program = require('commander');
 var cheerio = require('cheerio');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
+var URL_DEFAULT = "";
+var rest = require("restler");
+var sys = require("util");
 
 var assertFileExists = function(infile) {
     var instr = infile.toString();
@@ -61,18 +64,60 @@ var clone = function(fn) {
     return fn.bind({});
 };
 
+var cheerioURL = function(url) {
+    return cheerio.load(rest.get(url).on('complete', htmloutput));
+}
+
+var htmloutput = function(result) {
+    if (result instanceof Error) {
+        sys.puts('Error: ' + result.message);
+        this.retry(5000); // try again after 5 sec
+    } else {
+        return(result);
+    }
+}
+
+var checkWebFile = function (url,checksfile){
+	var outconsole = fn(url,checksfile);
+	rest.get(url).on('complete', outconsole);
+};
+
+var fn = function(url,checksfile) {
+	var outconsole = function(data) {      
+		var htmlsource = data;         
+		var checks = loadChecks(checksfile).sort();	  
+		var out = {};
+        	for(var ii in checks) {
+        	    var present = htmlsource.indexOf(checks[ii]) !== -1;
+        	    out[checks[ii]] = present;
+        	}
+        	var outJson = JSON.stringify(out, null, 4);
+		//console.log(outJson);        	    	
+	};
+   	return outconsole;
+};
+
 if(require.main == module) {
     program
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
-        .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
-    var outJson = JSON.stringify(checkJson, null, 4);
-    console.log(outJson);
+        .option('-u, --url <url>', 'Path to url', URL_DEFAULT)
+	.parse(process.argv);
+	
+    if (program.url) {
+        var $ = cheerioURL(program.url);
+	var checkWeb = checkWebFile(program.url,program.checks);
+	var outJson = JSON.stringify(checkJson, null, 4);
+	console.log("entra aca");
+    } else {
+        var $ = cheerioHtmlFile(program.file);
+	var checkJson = checkHtmlFile($, program.checks);
+    	var outJson = JSON.stringify(checkJson, null, 4);
+    	console.log(outJson);
+    }
 } else {
     exports.checkHtmlFile = checkHtmlFile;
 }
-
 
 
 
